@@ -10,6 +10,12 @@ var app = new Vue({
 		posts: [],
 		addSum: 0,
 		amount: 0,
+		user:{
+			id:null,
+			personaname:null,
+			wallet_balance:0,
+			likes:0
+		},
 		likes: 0,
 		commentText: '',
 		packs: [
@@ -36,52 +42,80 @@ var app = new Vue({
 	created(){
 		var self = this
 		axios
+			.get('/main_page/get_user')
+			.then(function (response) {
+				if(response.data.status == 'success')
+				{
+					self.user = response.data.user;
+				}
+			})
+
+		axios
 			.get('/main_page/get_all_posts')
 			.then(function (response) {
 				self.posts = response.data.posts;
 			})
 	},
+
 	methods: {
 		logout: function () {
 			console.log ('logout');
 		},
 		logIn: function () {
-			var self= this;
-			if(self.login === ''){
-				self.invalidLogin = true
+			if(this.login === ''){
+				this.invalidLogin = true
 			}
-			else if(self.pass === ''){
-				self.invalidLogin = false
-				self.invalidPass = true
+			else if(this.pass === ''){
+				this.invalidLogin = false
+				this.invalidPass = true
 			}
 			else{
-				self.invalidLogin = false
-				self.invalidPass = false
+				this.invalidLogin = false
+				this.invalidPass = false
 				axios.post('/main_page/login', {
-					login: self.login,
-					password: self.pass
+					login: this.login,
+					password: this.pass
 				})
-					.then(function (response) {
-						setTimeout(function () {
-							$('#loginModal').modal('hide');
-						}, 500);
-					})
+				.then(response => {
+					console.log(response, 'response');
+					if(response.data.status === 'error')
+					{
+						this.invalidLogin = true;
+						this.invalidPass = true;
+					}else
+					{
+						this.login = this.pass = '';
+						this.user = response.data.user;
+						this.closeModal('#loginModal');
+					}
+				}).catch(error => {
+					this.invalidLogin = true;
+					this.invalidPass = true;
+					console.error(error);
+				})
 			}
 		},
 		fiilIn: function () {
-			var self= this;
-			if(self.addSum === 0){
-				self.invalidSum = true
+			if(this.addSum <= 0){
+				this.invalidSum = true
 			}
 			else{
-				self.invalidSum = false
+				this.invalidSum = false
 				axios.post('/main_page/add_money', {
-					sum: self.addSum,
+					sum: this.addSum,
 				})
-					.then(function (response) {
-						setTimeout(function () {
-							$('#addModal').modal('hide');
-						}, 500);
+					.then( (response) => {
+						if(response.data.status === 'error')
+						{
+							this.invalidSum = true;
+
+						}else
+						{
+							this.invalidSum = false;
+							this.user.wallet_balance = response.data.amount;
+							this.addSum = null;
+							this.closeModal('#addModal');
+						}
 					})
 			}
 		},
@@ -99,28 +133,54 @@ var app = new Vue({
 				})
 		},
 		addLike: function (id) {
+			//TODO
+			this.likes = Math.floor(Math.random() * 100) + 1;
+			return ;
 			var self= this;
 			axios
 				.get('/main_page/like')
 				.then(function (response) {
-					self.likes = response.data.likes;
+					self.likes = Math.random();
 				})
 
 		},
 		buyPack: function (id) {
-			var self= this;
+			//TODO можно что-то получше сделать если останется время сделаем красиво
+			if(this.user.wallet_balance <= 0)
+			{
+				$('#noMoneyModal').modal('show');
+				return ;
+			}
 			axios.post('/main_page/buy_boosterpack', {
 				id: id,
 			})
-				.then(function (response) {
-					self.amount = response.data.amount
-					if(self.amount !== 0){
-						setTimeout(function () {
-							$('#amountModal').modal('show');
-						}, 500);
-					}
-				})
-		}
+			.then( (response) => {
+
+				if(response.data.status === 'error')
+				{
+					alert('Error!');
+					return ;
+				}else if(response.data.no_money)
+				{
+					$('#noMoneyModal').modal('show');
+					return ;
+				}
+
+				if(response.data.amount !== 0){
+					this.amount = response.data.amount;
+					setTimeout(function () {
+						$('#amountModal').modal('show');
+					}, 500);
+				}
+			})
+		},
+		closeModal: function(selector)
+		{
+			console.log('selector', selector);
+			setTimeout(()=> {
+				$(selector).modal('hide');
+			}, 500);
+		},
 	}
 });
 

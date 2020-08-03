@@ -32,8 +32,9 @@ class User_model extends CI_Emerald_Model {
     protected $time_created;
     /** @var string */
     protected $time_updated;
-
-
+    /** @var int */
+    protected $likes;
+    
     private static $_current_user;
 
     /**
@@ -226,6 +227,23 @@ class User_model extends CI_Emerald_Model {
         return $this->save('time_updated', $time_updated);
     }
 
+    /**
+     * @param int $likes
+     * @return bool
+     */
+    public function set_likes(int $likes)
+    {
+        $this->likes = $likes;
+        return $this->save('likes', $likes);
+    }
+
+    /**
+     * @return int
+     */
+    public function get_likes():int
+    {
+        return $this->likes;
+    }
 
     function __construct($id = NULL)
     {
@@ -301,9 +319,8 @@ class User_model extends CI_Emerald_Model {
 
         $o->personaname = $data->get_personaname();
         $o->avatarfull = $data->get_avatarfull();
-
-        $o->time_created = $data->get_time_created();
-        $o->time_updated = $data->get_time_updated();
+        $o->wallet_balance = $data->get_wallet_balance();
+        $o->likes = $data->get_likes();
 
 
         return $o;
@@ -374,6 +391,174 @@ class User_model extends CI_Emerald_Model {
         }
     }
 
+    /**
+     * @param $login
+     * @param $password
+     * @return int|null
+     */
+    public static function resolve_user_login($login, $password):?self
+    {
+        $user = App::get_ci()->s
+            ->from(self::CLASS_TABLE)
+            ->where('email', $login)
+            ->one();
 
+        //TODO тут можем проверять хэш ну и т.д и
+        // да лишний запрос но хочу спать так что думаю палками бить не будете
+        if (!empty($user) && $password == $user['password']) {
+            return new self($user['id']);
+        } else {
+            return null;
+        }
+    }
+
+    public function add_money(float $sum)
+    {
+        App::get_ci()->db->trans_begin();
+
+        try
+        {
+            App::get_ci()->load->model('Transaction_model');
+            $this->set_wallet_balance($this->get_wallet_balance() + $sum);
+            $this->set_wallet_total_refilled($this->get_wallet_total_refilled() + $sum);
+
+            Transaction_model::in_money($this->get_id(), $sum, 'Add money');
+
+            if (App::get_ci()->db->trans_status() === FALSE)
+            {
+                App::get_ci()->db->trans_rollback();
+            }
+            else
+            {
+                App::get_ci()->db->trans_commit();
+            }
+
+        }catch (Exception $emeraldModelSaveException)
+        {
+            App::get_ci()->db->trans_rollback();
+            throw new RuntimeException();
+        }
+    }
+
+    public function buy_boosterpack(int $boosterpack_id):int
+    {
+        App::get_ci()->db->trans_begin();
+
+        try {
+            App::get_ci()->load->model('Transaction_model');
+            App::get_ci()->load->model('Boosterpack_model');
+            App::get_ci()->load->model('User_Boosterpack_model');
+
+            $boosterpack_model = new Boosterpack_model($boosterpack_id);
+            $amount = $boosterpack_model->buy();
+
+            $this->set_wallet_balance($this->get_wallet_balance() - $boosterpack_model->get_price());
+            $this->set_wallet_total_withdrawn($this->get_wallet_total_withdrawn() + $boosterpack_model->get_price());
+            $this->set_likes($amount);
+            $comment = sprintf('Buy Boosterpack #%d', $boosterpack_id);
+
+            Transaction_model::out_money($this->get_id(), $boosterpack_model->get_price(), $comment);
+
+            User_Boosterpack_model::create([
+                'user_id' => $this->get_id(),
+                'boosterpack_id' => $boosterpack_id,
+                'count_like' => $amount
+            ]);
+
+            //TODO не лучший варик, в идеале добавить кастомный эксепшин
+            if ($this->get_wallet_balance() < 0) {
+                throw new RuntimeException();
+            }
+
+            if (App::get_ci()->db->trans_status() === FALSE) {
+                App::get_ci()->db->trans_rollback();
+            } else {
+                App::get_ci()->db->trans_commit();
+            }
+            return $amount;
+
+        } catch (Exception $emeraldModelSaveException) {
+            App::get_ci()->db->trans_rollback();
+            throw new RuntimeException($emeraldModelSaveException->getMessage());
+        }
+    }
+
+    /**
+     * @param int $post_id
+     */
+    public function like_post(int $post_id)
+    {
+        App::get_ci()->db->trans_begin();
+
+        try
+        {
+            App::get_ci()->load->model('Post_like_model');
+            App::get_ci()->load->model('Post_model');
+            $this->set_likes($this->get_likes() - 1);
+
+            Post_like_model::create([
+                'user_id' => $this->get_id(),
+                'post_id' => $post_id
+            ]);
+
+            $post_model = new Post_model($post_id);
+            $post_model->set_likes($post_model->get_likes() + 1);
+
+            if (App::get_ci()->db->trans_status() === FALSE)
+            {
+                App::get_ci()->db->trans_rollback();
+            }
+            else
+            {
+                App::get_ci()->db->trans_commit();
+            }
+
+            return $post_model->get_likes();
+
+        }catch (Exception $ex)
+        {
+            App::get_ci()->db->trans_rollback();
+            throw new RuntimeException($ex->getMessage());
+        }
+    }
+
+    /**
+     * @param int $comment_id
+     */
+    public function like_comment(int $comment_id)
+    {
+        App::get_ci()->db->trans_begin();
+
+        try
+        {
+            App::get_ci()->load->model('Comment_like_model');
+            App::get_ci()->load->model('Comment_model');
+            $this->set_likes($this->get_likes() - 1);
+
+            Comment_Like_model::create([
+                'user_id' => $this->get_id(),
+                'comment_id' => $comment_id
+            ]);
+
+            $comment_model = new Comment_model($comment_id);
+            $comment_model->set_likes($comment_model->get_likes() + 1);
+
+            if (App::get_ci()->db->trans_status() === FALSE)
+            {
+                App::get_ci()->db->trans_rollback();
+            }
+            else
+            {
+                App::get_ci()->db->trans_commit();
+            }
+
+            return $comment_model->get_likes();
+
+        }catch (Exception $ex)
+        {
+            App::get_ci()->db->trans_rollback();
+            throw new RuntimeException();
+        }
+    }
 
 }

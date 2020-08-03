@@ -14,7 +14,9 @@ class Comment_model extends CI_Emerald_Model
     /** @var int */
     protected $user_id;
     /** @var int */
-    protected $assing_id;
+    protected $assign_id;
+    /** @var int */
+    protected $parent_id;
     /** @var string */
     protected $text;
 
@@ -28,6 +30,43 @@ class Comment_model extends CI_Emerald_Model
     protected $likes;
     protected $user;
 
+    /**
+     * @return int
+     */
+    public function get_assign_id(): int
+    {
+        return $this->assign_id;
+    }
+
+    /**
+     * @param int $assign_id
+     *
+     * @return bool
+     */
+    public function set_assign_id(int $assign_id)
+    {
+        $this->assign_id = $assign_id;
+        return $this->save('assign_id', $assign_id);
+    }
+
+    /**
+     * @return int
+     */
+    public function get_parent_id(): ?int
+    {
+        return $this->parent_id;
+    }
+
+    /**
+     * @param int $parent_id
+     *
+     * @return bool
+     */
+    public function set_parent_id(int $parent_id)
+    {
+        $this->parent_id = $parent_id;
+        return $this->save('parent_id', $parent_id);
+    }
 
     /**
      * @return int
@@ -46,25 +85,6 @@ class Comment_model extends CI_Emerald_Model
     {
         $this->user_id = $user_id;
         return $this->save('user_id', $user_id);
-    }
-
-    /**
-     * @return int
-     */
-    public function get_assing_id(): int
-    {
-        return $this->assing_id;
-    }
-
-    /**
-     * @param int $assing_id
-     *
-     * @return bool
-     */
-    public function set_assing_id(int $assing_id)
-    {
-        $this->assing_id = $assing_id;
-        return $this->save('assing_id', $assing_id);
     }
 
 
@@ -126,14 +146,22 @@ class Comment_model extends CI_Emerald_Model
         return $this->save('time_updated', $time_updated);
     }
 
-    // generated
-
     /**
-     * @return mixed
+     * @return int
      */
-    public function get_likes()
+    public function get_likes():int
     {
         return $this->likes;
+    }
+
+    /**
+     * @param int $likes
+     * @return bool
+     */
+    public function set_likes(int $likes):bool
+    {
+        $this->likes = $likes;
+        return  $this->save('likes', $likes);
     }
 
     /**
@@ -218,6 +246,8 @@ class Comment_model extends CI_Emerald_Model
     {
         switch ($preparation)
         {
+            case 'full_info_one':
+                return self::_preparation_full_info_one($data);
             case 'full_info':
                 return self::_preparation_full_info($data);
             default:
@@ -226,6 +256,28 @@ class Comment_model extends CI_Emerald_Model
     }
 
 
+    /**
+     * @param Comment_model $data
+     * @return stdClass
+     * @throws Exception
+     */
+    private static function _preparation_full_info_one(Comment_model $data):stdClass
+    {
+        $o = new stdClass();
+
+        $o->id = $data->get_id();
+        $o->text = $data->get_text();
+        $o->parent_id = $data->get_parent_id();
+        $o->likes = $data->get_likes();
+        $o->assign_id = $data->get_assign_id();
+
+        $o->user = User_model::preparation($data->get_user(),'main_page');
+
+        $o->time_created = $data->get_time_created();
+        $o->time_updated = $data->get_time_updated();
+
+        return $o;
+    }
     /**
      * @param self[] $data
      * @return stdClass[]
@@ -242,7 +294,7 @@ class Comment_model extends CI_Emerald_Model
 
             $o->user = User_model::preparation($d->get_user(),'main_page');
 
-            $o->likes = rand(0, 25);
+            $o->likes = $d->get_likes();
 
             $o->time_created = $d->get_time_created();
             $o->time_updated = $d->get_time_updated();

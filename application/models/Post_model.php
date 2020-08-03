@@ -17,6 +17,8 @@ class Post_model extends CI_Emerald_Model
     protected $text;
     /** @var string */
     protected $img;
+    /** @var int */
+    protected $likes;
 
     /** @var string */
     protected $time_created;
@@ -25,7 +27,6 @@ class Post_model extends CI_Emerald_Model
 
     // generated
     protected $comments;
-    protected $likes;
     protected $user;
 
 
@@ -125,14 +126,24 @@ class Post_model extends CI_Emerald_Model
         return $this->save('time_updated', $time_updated);
     }
 
-    // generated
 
     /**
-     * @return mixed
+     * @return int
      */
-    public function get_likes()
+    public function get_likes():int
     {
         return $this->likes;
+    }
+
+
+    /**
+     * @param int $likes
+     * @return bool
+     */
+    public function set_likes(int $likes):bool
+    {
+        $this->likes = $likes;
+        return $this->save('likes', $likes);
     }
 
     /**

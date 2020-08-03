@@ -21,41 +21,25 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarTogglerDemo01">
         <li class="nav-item">
-            <?  if (User_model::is_logged()) {?>
-              <a href="/main_page/logout" class="btn btn-primary my-2 my-sm-0"
-                 data-target="#loginModal">Log out, <?= $user->personaname?>
-              </a>
-            <? } else {?>
-              <button type="button" class="btn btn-success my-2 my-sm-0" type="submit" data-toggle="modal"
+              <template v-if="user.id">
+                  <a href="/main_page/logout" class="btn btn-primary my-2 my-sm-0"
+                     data-target="#loginModal">Log out, {{user.personaname}}
+                  </a>
+              </template>
+              <button v-if="!user.id" type="button" class="btn btn-success my-2 my-sm-0" type="submit" data-toggle="modal"
                       data-target="#loginModal">Log IN
               </button>
-            <? } ?>
         </li>
         <li class="nav-item">
-            <?  if (User_model::is_logged()) {?>
-              <button type="button" class="btn btn-success my-2 my-sm-0" type="submit" data-toggle="modal"
-                      data-target="#addModal">Add balance
-              </button>
-            <? }?>
+            <template v-if="user.id">
+                <span>Balance: {{user.wallet_balance}}</span>
+                <button type="button" class="btn btn-success my-2 my-sm-0" type="submit" data-toggle="modal"
+                        data-target="#addModal">Add balance
+                </button>
+            </template>
         </li>
       </div>
-<!--      <div class="collapse navbar-collapse" id="navbarTogglerDemo01">-->
-<!--        <li class="nav-item">-->
-<!--            --><?// if (User_model::is_logged()) {?>
-<!--              <button type="button" class="btn btn-primary my-2 my-sm-0" type="submit" data-toggle="modal"-->
-<!--                      data-target="#loginModal">Log in-->
-<!--              </button>-->
-<!--            --><?// } else {?>
-<!--              <button type="button" class="btn btn-danger my-2 my-sm-0" href="/logout">Log out-->
-<!--              </button>-->
-<!--            --><?// } ?>
-<!--        </li>-->
-<!--        <li class="nav-item">-->
-<!--          <button type="button" class="btn btn-success my-2 my-sm-0" type="submit" data-toggle="modal"-->
-<!--                  data-target="#addModal">Add balance-->
-<!--          </button>-->
-<!--        </li>-->
-<!--      </div>-->
+
     </nav>
   </div>
   <div class="main">
@@ -208,7 +192,7 @@
           <form>
             <div class="form-group">
               <label for="exampleInputEmail1">Enter sum</label>
-              <input type="text" class="form-control" id="addBalance" v-model="addSum" required>
+              <input type="number" min="0" class="form-control" id="addBalance" v-model="addSum" required>
               <div class="invalid-feedback" v-if="invalidSum">
                 Please write a sum.
               </div>
@@ -222,6 +206,31 @@
     </div>
   </div>
   <!-- Modal -->
+    <!-- Modal -->
+    <div class="modal fade" id="noMoneyModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exampleModalLabel">No money</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger" role="alert">
+                        No money top up balance <!--- )))-->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success my-2 my-sm-0" type="submit" data-toggle="modal"
+                            data-target="#addModal">Add balance
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal -->
   <div class="modal fade" id="amountModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
        aria-hidden="true">
     <div class="modal-dialog" role="document">

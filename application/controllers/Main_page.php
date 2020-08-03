@@ -8,14 +8,32 @@
  */
 class Main_page extends MY_Controller
 {
-
     public function __construct()
     {
         parent::__construct();
 
         App::get_ci()->load->model('User_model');
-        App::get_ci()->load->model('Login_model');
-        App::get_ci()->load->model('Post_model');
+
+        //TODO можно сделать через MW
+        if (!User_model::is_logged())
+        {
+            $allowed = [
+                'index',
+                'login',
+                'logout',
+                'get_all_posts',
+                'get_post',
+            ];
+
+            if (!in_array($this->router->fetch_method(), $allowed))
+            {
+                redirect('main_page/login');
+            }
+        }
+
+        App::get_ci()->load
+            ->model('Login_model')
+            ->model('Post_model');
 
         if (is_prod())
         {
@@ -25,11 +43,7 @@ class Main_page extends MY_Controller
 
     public function index()
     {
-        $user = User_model::get_user();
-
-
-
-        App::get_ci()->load->view('main_page', ['user' => User_model::preparation($user, 'default')]);
+        App::get_ci()->load->view('main_page');
     }
 
     public function get_all_posts()
@@ -59,11 +73,10 @@ class Main_page extends MY_Controller
     }
 
 
-    public function comment($post_id,$message){ // or can be App::get_ci()->input->post('news_id') , but better for GET REQUEST USE THIS ( tests )
+    public function comment($post_id){ // or can be App::get_ci()->input->post('news_id') , but better for GET REQUEST USE THIS ( tests )
 
-        if (!User_model::is_logged()){
-            return $this->response_error(CI_Core::RESPONSE_GENERIC_NEED_AUTH);
-        }
+        $message = $this->input->input_stream('message', true);
+        $parent_id = $this->input->input_stream('parent_id', true);
 
         $post_id = intval($post_id);
 
@@ -73,34 +86,52 @@ class Main_page extends MY_Controller
 
         try
         {
+            //TODO оставлю это увы "CRM" в CI желает лучшего...
+            // или я тупой или в этом чуде даже нет count))))
             $post = new Post_model($post_id);
         } catch (EmeraldModelNoDataException $ex){
             return $this->response_error(CI_Core::RESPONSE_GENERIC_NO_DATA);
         }
 
+        $comment = Comment_model::create([
+            'user_id' => 1,//User_model::get_session_id(),
+            'assign_id' => $post_id,
+            'text' => $message,
+            'parent_id' => (int)$parent_id
+        ]);
 
-        $posts =  Post_model::preparation($post, 'full_info');
-        return $this->response_success(['post' => $posts]);
+        return $this->response_success([
+            'comment' => Comment_model::preparation($comment, 'full_info_one')
+        ]);
     }
 
-
-    public function login($user_id)
+    public function login()
     {
-        // Right now for tests:
-        $post_id = intval($user_id);
+        $this->load->library('form_validation');
 
-        if (empty($post_id)){
+        $this->form_validation->set_rules('login', 'Username', 'required');
+        $this->form_validation->set_rules('password', 'Password', 'required');
+        $this->form_validation->set_data($this->input->input_stream(null, true));
+
+        if ($this->form_validation->run() == FALSE){
             return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
         }
 
-        // But data from modal window sent by POST request.  App::get_ci()->input...  to get it.
+        try {
+            $user = User_model::resolve_user_login(
+                $this->input->input_stream('login', true),
+                $this->input->input_stream('password', true));
 
+            if (is_null($user)){
+                return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+            }
+            Login_model::start_session($user->get_id());
+        }catch (Exception $exception) //TODO захватил (думаю тут не критично)
+        {
+            return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+        }
 
-        //Todo: Authorisation
-
-        Login_model::start_session($user_id);
-
-        return $this->response_success(['user' => $user_id]);
+        return $this->response_success(['user' => User_model::preparation($user, 'main_page')]);
     }
 
 
@@ -111,19 +142,102 @@ class Main_page extends MY_Controller
     }
 
     public function add_money(){
-        // todo: add money to user logic
-        return $this->response_success(['amount' => rand(1,55)]);
+
+        $this->load->library('form_validation');
+
+        $this->form_validation->set_rules('sum', 'Sum', 'required|numeric');
+        $this->form_validation->set_data($this->input->input_stream(null, true));
+
+        if ($this->form_validation->run() == FALSE){
+            return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+        }
+
+        $user = User_model::get_user();
+
+        try
+        {
+            $user->add_money((float)$this->input->input_stream('sum', true));
+        }catch (RuntimeException $runtimeException)
+        {
+            return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+        }
+
+        return $this->response_success(['amount' => $user->get_wallet_balance()]);
     }
 
-    public function buy_boosterpack(){
-        // todo: add money to user logic
-        return $this->response_success(['amount' => rand(1,55)]);
+
+    public function buy_boosterpack()
+    {
+        $this->load->library('form_validation');
+
+        $this->form_validation->set_rules('id', 'Id', 'required|numeric');
+        $this->form_validation->set_data($this->input->input_stream(null, true));
+
+        if ($this->form_validation->run() == FALSE)
+        {
+            return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+        }
+        $user = User_model::get_user();
+        try
+        {
+            $amount = $user->buy_boosterpack((int)$this->input->input_stream('id'));
+
+        }catch (RuntimeException $runtimeException)
+        {
+            return $this->response_error($runtimeException->getMessage().CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+        }
+        return $this->response_success(['amount' => $amount]);
     }
 
+    public function get_user()
+    {
+        $user = User_model::get_user();
+        if(!$user->get_id())
+        {
+            return $this->response_error(CI_Core::RESPONSE_GENERIC_NO_ACCESS);
+        }
 
-    public function like(){
-        // todo: add like post\comment logic
-        return $this->response_success(['likes' => rand(1,55)]); // Колво лайков под постом \ комментарием чтобы обновить
+        return $this->response_success(['user' => User_model::preparation($user, 'main_page')]);
     }
 
+    public function like()
+    {
+        $data = $this->input->input_stream(null, true);
+        $this->load->library('form_validation');
+
+        $this->form_validation->set_rules('entity', 'Entity', 'required');
+        $this->form_validation->set_rules('id', 'Id', 'required');
+        $this->form_validation->set_data($data);
+
+
+        if ($this->form_validation->run() == FALSE || !in_array($data['entity'], ['post', 'comment']))
+        {
+            return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+        }
+
+        $user = User_model::get_user();
+
+        if($user->get_likes() < 1)
+        {
+            return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+        }
+
+        try
+        {
+            $likes = 0;
+            if($data['entity'] == 'post')
+            {
+                $likes = $user->like_post((int)$data['id']);
+            }elseif ($data['entity'] == 'comment')
+            {
+                $likes = $user->like_comment((int)$data['id']);
+            }
+
+        }catch (RuntimeException $runtimeException)
+        {
+            return $this->response_error(CI_Core::RESPONSE_GENERIC_WRONG_PARAMS);
+        }
+
+        return $this->response_success(['likes' => $likes]); // Колво лайков под постом \ комментарием чтобы обновить
+    }
 }
